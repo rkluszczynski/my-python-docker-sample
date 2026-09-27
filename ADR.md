@@ -61,22 +61,26 @@ The following requirements are sufficient to recreate the project from scratch.
 2. Module-level state:
   - `SERVER_STARTED_AT` — UTC ISO 8601 timestamp captured at import time.
   - `agent_started_at`, `agent_finished_at` — `str | None`.
+  - `agent_finished_with_error` — `str | None`, set to the exception message
+    when `main()` fails.
   - `batch_lock` — `threading.Lock` guaranteeing a single active batch run.
-  - `state_lock` — `threading.Lock` protecting the timestamps.
-3. Background execution: `run_batch()` calls `main()` and, in `finally`, sets
-   `agent_started_at = None`, `agent_finished_at = <UTC now>` and releases
-   `batch_lock`.
+  - `state_lock` — `threading.Lock` protecting the timestamps and error field.
+3. Background execution: `run_batch()` calls `main()`. In the `except` branch it
+  stores the current UTC completion time, stores the exception string in
+  `agent_finished_with_error`, and re-raises the error. In the success path it
+  clears `agent_finished_with_error`. `finally` always releases `batch_lock`.
 4. Endpoints (all responses are JSON unless a file is downloaded):
 
   | Method | Path | Success | Errors |
   |---|---|---|---|
-  | `GET` | `/status` | `200` with `server_started_at`, `agent_started_at`, `agent_finished_at`, `agent_status` (`running` / `idle`) | — |
+  | `GET` | `/status` | `200` with `server_started_at`, `agent_started_at`, `agent_finished_at`, `agent_status` (`running` / `idle`), `agent_finished_with_error` | — |
   | `POST` | `/start` | `202` with `{"status": "agent started"}` | `406` with `{"error": "agent is already running"}` |
   | `GET` | `/results` | `200` with `{"results": [{"file_name", "download_url"}]}`, newest first | — |
   | `GET` | `/results/{result_file_name}` | `200`, file download, `application/json` | `400` invalid name (path traversal or not `.json`), `404` not found |
 
 5. `/start` acquires `batch_lock` non-blocking, sets `agent_started_at` to UTC
-   now, clears `agent_finished_at`, and starts a daemon `Thread`.
+  now, clears `agent_finished_at` and `agent_finished_with_error`, and starts a
+  daemon `Thread`.
 6. Endpoints returning different response classes (`JSONResponse` or
   `FileResponse`) must not use a union return annotation — FastAPI would try to
   build a Pydantic response model and fail at startup. Omit the annotation or use

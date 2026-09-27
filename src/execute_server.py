@@ -16,18 +16,25 @@ app = FastAPI()
 SERVER_STARTED_AT = datetime.now(timezone.utc).isoformat()
 agent_started_at: str | None = None
 agent_finished_at: str | None = None
+agent_finished_with_error: str | None = None
 batch_lock = Lock()
 state_lock = Lock()
 batch_thread: Thread | None = None
 
 
-def set_agent_state(*, started_at: str | None = None, finished_at: str | None = None) -> None:
-    """Store the current batch lifecycle timestamps."""
-    global agent_finished_at, agent_started_at
+def set_agent_state(
+    *,
+    started_at: str | None = None,
+    finished_at: str | None = None,
+    finished_with_error: str | None = None,
+) -> None:
+    """Store the current batch lifecycle timestamps and any error message."""
+    global agent_finished_at, agent_started_at, agent_finished_with_error
 
     with state_lock:
         agent_started_at = started_at
         agent_finished_at = finished_at
+        agent_finished_with_error = finished_with_error
 
 
 def get_agent_state() -> dict[str, Any]:
@@ -38,6 +45,7 @@ def get_agent_state() -> dict[str, Any]:
             "agent_started_at": agent_started_at,
             "agent_finished_at": agent_finished_at,
             "agent_status": "running" if batch_lock.locked() else "idle",
+            "agent_finished_with_error": agent_finished_with_error,
         }
 
 
@@ -54,11 +62,20 @@ def run_batch() -> None:
     """Execute the batch job and update its final state."""
     try:
         main()
-    finally:
+    except Exception as exc:  # pragma: no cover - runtime failure reporting
         set_agent_state(
             started_at=None,
             finished_at=datetime.now(timezone.utc).isoformat(),
+            finished_with_error=str(exc),
         )
+        raise
+    else:
+        set_agent_state(
+            started_at=None,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            finished_with_error=None,
+        )
+    finally:
         batch_lock.release()
 
 
@@ -82,6 +99,7 @@ def start() -> JSONResponse:
     set_agent_state(
         started_at=datetime.now(timezone.utc).isoformat(),
         finished_at=None,
+        finished_with_error=None,
     )
     batch_thread = Thread(target=run_batch, daemon=True)
     batch_thread.start()

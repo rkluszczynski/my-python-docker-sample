@@ -44,7 +44,9 @@ There is no test suite or linter configured yet.
   `/tmp/agent-results/result-at-<YYYYMMDDTHHMMSS>.json`, and prunes old results
   to `RESULTS_TO_KEEP` (read from `.env`, default `7`).
 - `execute_server` holds in-memory state guarded by two locks:
-  `batch_lock` (single active run) and `state_lock` (timestamps).
+  `batch_lock` (single active run) and `state_lock` (timestamps plus failure state).
+- `/status` returns `server_started_at`, `agent_started_at`, `agent_finished_at`,
+  `agent_status`, and `agent_finished_with_error`.
 - Endpoints: `GET /status` (200), `POST /start` (202 / 406 when already
   running), `GET /results` (200), `GET /results/{name}` (200 / 400 / 404).
 

@@ -28,6 +28,7 @@ This repository contains a small Python service composed of:
 
 - prints exactly `Hello, world!`
 - sleeps for a random time from 2 to 10 seconds
+- creates `/tmp/agent-results` if it does not exist
 - writes a JSON file to `/tmp/agent-results`
 - keeps only the newest result files according to `RESULTS_TO_KEEP`
 - reads an optional `.env` file from the current working directory
@@ -41,7 +42,7 @@ Example result file written by the batch job:
 }
 ```
 
-The file name format is `result-at-YYYYMMDDTHHMMSS.json`, and the retention limit defaults to `7` when the environment variable is missing or invalid.
+The file name format is `result-at-YYYYMMDDTHHMMSS.json`, while the `created_at` field is a UTC ISO 8601 timestamp. The retention limit defaults to `7` when the environment variable is missing or invalid.
 
 ## Configuration
 
@@ -68,9 +69,12 @@ Returns the current server and agent state:
   "server_started_at": "2026-09-27T00:00:00+00:00",
   "agent_started_at": "2026-09-27T00:15:40+00:00",
   "agent_finished_at": null,
-  "agent_status": "running"
+  "agent_status": "running",
+  "agent_finished_with_error": null
 }
 ```
+
+If the batch exits with an exception, `agent_finished_with_error` contains the exception message and `agent_finished_at` is set to the UTC completion time.
 
 ### `POST /start`
 
